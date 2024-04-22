@@ -1,0 +1,343 @@
+# Import needed packages
+library(tidyverse)
+library(ggplot2) 
+library(tigerstats) 
+library(reticulate)
+library(MASS)
+library(MLmetrics)
+library(dplyr)
+library(PASWR2)
+library(leaps)
+library(caret)
+library(fBasics)
+library(car)
+library(dummy)
+library(fastDummies)
+library(glmnet)
+#data preproccesing
+#load data
+mydata=read.csv(file = 'Different_stores_dataset.csv', header = TRUE, sep = ",")
+
+#create new column
+mydata$totalsales=mydata$quantity * mydata$selling_price_per_unit
+str(mydata)
+
+#check for missing values
+names(which(colSums(is.na(mydata))>0))
+
+#check for duplicates
+duplicated=mydata[duplicated(mydata), ]
+print(duplicated)
+
+#rename columns
+colnames(mydata)[colnames(mydata) == "selling_price_per_unit"]="sellingppu"
+colnames(mydata)[colnames(mydata) == "cost_price_per_unit"]="costppu"
+colnames(mydata)[colnames(mydata) == "payment_method"]="pmethod"
+#histogram and plot analysis
+
+hist(mydata$age, col = "lightblue", main = "Age Distribution", xlab = "Age")
+hist(mydata$totalsales, col = "lightcoral", main = "total sales per Unit Distribution", xlab = "total sales Distribution")
+barplot(table(mydata$pmethod), col = "lightpink", main = "Payment Method Distribution", xlab = "Payment Method", ylab = "Count")
+barplot(table(mydata$category), col = "lightgreen", main = "Category Distribution", xlab = "Category", ylab = "Count")
+hist(mydata$sellingppu, col = "lightcoral", main = "Selling Price per Unit Distribution", xlab = "Selling Price per Unit")
+hist(mydata$costppu, col = "blue", main = "Cost Price per Unit Distribution", xlab = "Cost Price per Unit")
+
+#sales divided by region
+salesregion=aggregate(mydata$quantity,by=list(region = mydata$region), sum)
+ggplot(salesregion, aes(x = region, y = x, fill = region)) + geom_bar(stat = "identity", position = "dodge", color = "black") + labs(title = "Region-wise Sales")+theme_minimal()
+
+#categories most popular
+ggplot(mydata, aes(x = category, y = totalsales))+
+  geom_bar(stat = "summary", fun = "sum", fill = "blue") +
+  labs(x = "Category", y = "Total Sales", title = "Total Sales by Category")
+#hypothesis testing 1 
+#Ho:There is no significant difference in how much does men and womer spend
+#Ha:There is  significant difference in how much does men and womer sp
+menspend=mydata$totalsales[mydata$gender == "Male"]
+womenspend=mydata$totalsales[mydata$gender == "Female"]
+diffmenwoman= menspend-womenspend
+z.test(diffmenwoman,NULL,alternative = "two.sided",mu=0,sigma.x=sd(diffmenwoman),sigma.y = NULL,conf.level = 0.95)
+#hypothesis testing 2 
+#Ho:There is no significant difference in purchasing behaviors among different age groups.
+#Ha:There is significant difference in purchasing behaviors among different age groups.
+groups=quantile(mydata$age, probs = c(0, 0.25, 0.5, 0.75, 1))
+#create the 4 the groups
+mydata$agegroups=cut(mydata$age,breaks = groups,labels = c("Group1", "Group2", "Group3", "Group4"))
+y=mydata$totalsales
+anov=lm(y~mydata$agegroups)
+summary(anov)
+#hypothesis testing 3
+#Ho:There is no significant difference in the total purchase amount influenced by different payment methods.
+#Ha:There is a significant difference in the total purchase amount influenced by different payment methods.
+y=mydata$totalsales
+paymentmeth=mydata$pmethod
+attach(mydata)
+CreditCard=mydata[which(pmethod=='Credit Card'),]
+DebitCard=mydata[which(pmethod=='Debit Card'),]
+Cash=mydata[which(pmethod=='Cash'),]
+anov=lm(y~paymentmeth)
+summary(anov)
+#preparation for lineal regression model- LRM1.
+#prepare data
+#load data
+mydata=read.csv(file = 'Different_stores_dataset.csv', header = TRUE, sep = ",")
+
+#create new column
+mydata$totalsales=mydata$quantity * mydata$selling_price_per_unit
+
+#rename columns
+colnames(mydata)[colnames(mydata) == "selling_price_per_unit"]="sellingppu"
+colnames(mydata)[colnames(mydata) == "cost_price_per_unit"]="costppu"
+colnames(mydata)[colnames(mydata) == "payment_method"]="pmethod"
+
+#convert to numerical variable
+mydata$gendernum=ifelse(mydata$gender == "Female", 1, 0)
+
+#delete useless variables
+excluded=c("invoice_no","customer_id", "shopping_mall", "state", "invoice_date", "category","region","gender","pmethod")
+mydata=mydata[, !(names(mydata) %in% excluded)]
+
+cor(mydata)
+#selection of variables LMR1.
+
+#transformation of age
+totalsales=mydata$totalsales
+age=mydata$age
+cor(totalsales,age)
+age2=age*age
+cor(totalsales,age2)
+agelog=log(age)
+cor(totalsales,agelog)
+AgeI=1/age
+cor(totalsales,AgeI)
+AgeSQRT=sqrt(age)
+cor(totalsales,AgeSQRT)
+
+#eliminate age
+mydata=mydata[, !(names(mydata) %in% c("age"))]
+
+#prepare for model
+colnames(mydata)
+set.seed(123) # for reproducibility
+select.data = sample(1:nrow(mydata),0.8 * nrow(mydata))
+train.data=mydata[select.data, ]
+test.data=mydata[-select.data, ]
+#build models LMR1.
+#full model
+m_full=lm(totalsales~., data=train.data)
+summary(m_full)
+
+#base model
+m_base=lm(totalsales ~ costppu,data=train.data)
+summary(m_base)
+
+#backward model
+m1=step(m_full,direction="backward", trace=T)
+summary(m1)
+
+#forward model
+m2=step(m_base,scope=list(upper=m_full,lower=m_base),direction="forward",trace=T)
+summary(m2)
+
+#stepwise: both direction model
+m3=step(m_base,scope=list(upper=m_full,lower=m_base),direction="both",trace=T)
+summary(m3)
+
+#best subset  adj-r2
+leaps(x=train.data[,cbind(1,2,3,5)],y=train.data[,4],names=names(colnames(df)[2]),method='adjr2')
+#due to multicorrilinearity gender variables cant be added.
+m4=lm(totalsales~quantity+costppu+sellingppu,data=train.data)
+summary(m4)
+#residual analysis LRM1.
+#constant variance
+par(mfrow=c(2,3))
+plot (fitted(m_full),rstandard(m_full), xlab="Predicted", ylab ="Residuals", main="Predicted v Residuals m_full ")
+abline (a=0, b=0, col="red")
+plot (fitted(m_base), rstandard(m_base), xlab="Predicted values", ylab ="Studentized residuals",main="Predicted v.s. Residuals m_base")
+abline (a=0, b=0, col="red")
+plot (fitted(m1), rstandard(m1), xlab="Predicted values", ylab ="Studentized residuals", main="Predicted v.s. Residuals m1")
+abline (a=0, b=0, col="red")
+plot (fitted(m2), rstandard(m2), xlab="Predicted values", ylab ="Studentized residuals", main="Predicted v.s. Residuals m2")
+abline (a=0, b=0, col="red")
+plot (fitted(m3), rstandard(m3), xlab="Predicted values", ylab ="Studentized residuals", main="Predicted v.s. Residuals m3")
+abline (a=0, b=0, col="red")
+plot (fitted(m4), rstandard(m4), xlab="Predicted values", ylab ="Studentized residuals", main="Predicted v.s. Residuals m4")
+abline (a=0, b=0, col="red")
+
+#full model-linearity relantionship
+par(mfrow=c(2,2))
+plot (train.data$quantity, rstandard(m_full), xlab="quantity", ylab = "studentized residuals", main="quantity vs Residuals")
+abline (a=0, b=0, col="red")
+plot (train.data$sellingppu, rstandard(m_full), xlab="sellingppu", ylab = "studentized", main="sellingppu vsResiduals")
+abline (a=0, b=0, col="red")
+plot (train.data$costppu, rstandard(m_full), xlab="costppu", ylab = "studentized residuals",main="costppu v.s. Residuals Plot")
+abline (a=0, b=0, col="red")
+plot (train.data$gendernum, rstandard(m_full), xlab="gendernum", ylab = "studentized residuals",main="gendernum v.s. Residuals Plot")
+abline (a=0, b=0, col="red")
+
+#base model-linearity relantionship
+par(mfrow=c(1,1))
+plot (train.data$costppu, rstandard(m_base), xlab="costppu", ylab = "studentized residuals",main="costppu v.s. Residuals Plot")
+abline (a=0, b=0, col="red")
+
+#m1,m2,m3,m4 model-linearity relationship
+par(mfrow=c(1,3))
+plot (train.data$quantity, rstandard(m1), xlab="quantity", ylab = "studentized residuals", main="quantity vs Residuals")
+abline (a=0, b=0, col="red")
+plot (train.data$sellingppu, rstandard(m1), xlab="sellingppu", ylab = "studentized", main="sellingppu vs Residuals")
+abline (a=0, b=0, col="red")
+plot (train.data$costppu, rstandard(m1), xlab="costppu", ylab = "studentized residuals",main="costppu v.s. Residuals Plot")
+abline (a=0, b=0, col="red")
+
+#normality test
+par(mfrow=c(2,2))
+#m_full normality
+residualmfull= rstandard(m_full)
+qqnorm(rstandard(m_full))
+qqline(rstandard(m_full), col = 2)
+title(main="Q-Q plot para Residuales m_full")
+
+#m_base normality
+residualmabase = rstandard(m_base)
+qqnorm(rstandard(m_base))
+qqline(rstandard(m_base), col = 2)
+title(main="Q-Q plot para Residuales m_base")
+
+#m1,m2,m3,m4 normality
+residualm1 = rstandard(m1)
+qqnorm(rstandard(m1))
+qqline(rstandard(m1), col = 2)
+title(main="Q-Q plot  Residuales m1,m2,m3,m4")
+#Advanced techniques LRM1.
+vif(m_full)
+m_full2=lm(totalsales~quantity+gendernum+sellingppu,data=train.data)
+vif(m_full2) 
+
+vif(m1)
+m5=lm(totalsales~quantity+sellingppu,data=train.data)
+vif(m5)
+
+summary(m_full2)
+summary(m5)
+
+#remove influence
+influencem_full=influence.measures(m_full);
+#summary (influencem_full);
+threshold =4/(0.8*nrow(mydata))
+influencem_full=which(influencem_full$cooks.distance > threshold)
+print(influencem_full)
+
+influencem_base=influence.measures(m_base);
+#summary (influencem_base);
+threshold =4/(0.8*nrow(mydata))
+influencem_base=which(influencem_base$cooks.distance > threshold)
+print(influencem_base)
+
+influencem1=influence.measures(m1);
+#summary (influencem1);
+threshold =4/(0.8*nrow(mydata))
+influencem1=which(influencem1$cooks.distance > threshold)
+print(influencem1)
+
+influencem_full2=influence.measures(m_full2);
+#summary (influencem_full2);
+threshold =4/(0.8*nrow(mydata))
+influencem_full2=which(influencem_full2$cooks.distance > threshold)
+print(influencem_full2)
+
+influencem5=influence.measures(m5);
+#summary (influencem5);
+threshold =4/(0.8*nrow(mydata))
+influencem5=which(influencem5$cooks.distance > threshold)
+print(influencem5)
+#evaluation LRM1.
+y1=predict.glm(m_full,test.data)
+y2=predict.glm(m_base,test.data)
+y3=predict.glm(m1,test.data)
+y4=predict.glm(m_full2,test.data)
+y5=predict.glm(m5,test.data)
+y=test.data$totalsales
+rmse1=sqrt((y-y1)%*%(y-y1)/nrow(test.data))
+rmse2=sqrt((y-y2)%*%(y-y2)/nrow(test.data))
+rmse3=sqrt((y-y3)%*%(y-y3)/nrow(test.data))
+rmse4=sqrt((y-y4)%*%(y-y4)/nrow(test.data))
+rmse5=sqrt((y-y5)%*%(y-y5)/nrow(test.data))
+rmse1
+rmse2
+rmse3
+rmse4
+rmse5
+#prepare data LRM2. 
+#load data
+rm(list=ls())
+mydata=read.csv(file = 'Different_stores_dataset.csv', header = TRUE, sep = ",")
+
+#create new column
+mydata$totalsales=mydata$quantity * mydata$selling_price_per_unit
+
+#rename columns
+colnames(mydata)[colnames(mydata) == "selling_price_per_unit"]="sellingppu"
+colnames(mydata)[colnames(mydata) == "cost_price_per_unit"]="costppu"
+colnames(mydata)[colnames(mydata) == "payment_method"]="pmethod"
+#delete useless variables LRM2.
+excluded=c("invoice_no","customer_id", "shopping_mall", "state", "invoice_date", "category","region","gender","pmethod")
+mydata=mydata[, !(names(mydata) %in% excluded)]
+cor(mydata)
+
+#transformation of age
+sellingppu=mydata$sellingppu
+age=mydata$age
+cor(sellingppu,age)
+age2=age*age
+cor(sellingppu,age2)
+agelog=log(age)
+cor(sellingppu,agelog)
+AgeI=1/age
+cor(sellingppu,AgeI)
+AgeSQRT=sqrt(age)
+cor(sellingppu,AgeSQRT)
+
+#eliminate age
+mydata=mydata[, !(names(mydata) %in% c("age"))]
+colnames(mydata)
+set.seed(123)  # for reproducibility
+select.data = sample(1:nrow(mydata),0.8 * nrow(mydata))
+train.data=mydata[select.data, ]
+test.data=mydata[-select.data, ]
+#build models LRM2.
+trCtl=trainControl(method="cv",number=10)
+
+#full model
+m_full=train(sellingppu~.,data=mydata, method = "lm",trControl = trCtl)
+print(m_full)
+
+#base model
+m_base=train(sellingppu~costppu,data=mydata, method = "lm",trControl = trCtl)
+print(m_base)
+
+#m1 model
+m1=train(sellingppu~.,data=mydata, method = "leapSeq",trControl = trCtl)
+print(m1)
+
+#m2 
+m2=train(sellingppu~.,data=mydata, method = "lmStepAIC",trControl = trCtl)
+print(m2)
+
+#lasso model
+Xlasso=mydata[, c("quantity", "costppu", "totalsales")]
+ylasso=mydata$sellingppu
+m3=train(x = Xlasso,y = ylasso,method = "lasso",trControl = trCtl)
+print(m3)
+
+#ridge model
+Xridge=mydata[, c("quantity", "costppu", "totalsales")]
+yridge=mydata$sellingppu
+m4=train(x = Xridge,y = yridge,method ="ridge",trControl = trCtl)
+print(m4)
+#evaluation LRM2.
+print(m_full)
+print(m_base)
+print(m1)
+print(m2)
+print(m3)
+print(m4)
