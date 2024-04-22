@@ -12,8 +12,8 @@ Data analysis project related to sales data from different stores
 
 - Linear Regression Modeling (LRM):  Prepare data for linear regression modeling by renaming columns, converting categorical variables to numerical, and selecting relevant variables. Then,  build several linear regression models including a full model, base model, backward model, forward model, stepwise model, and best subset model. Residual analysis and normality tests are conducted to evaluate model assumptions.
 
--Advanced Techniques in LRM: Advanced techniques such as variance inflation factor (VIF) analysis, identifying influential data points, and assessing multicollinearity are performed to improve model accuracy and reliability.
+- Advanced Techniques in LRM: Advanced techniques such as variance inflation factor (VIF) analysis, identifying influential data points, and assessing multicollinearity are performed to improve model accuracy and reliability.
 
--Evaluation of Models: The performance of each model is evaluated using root mean square error (RMSE) on a test dataset.
+- Evaluation of Models: The performance of each model is evaluated using root mean square error (RMSE) on a test dataset.
 
--Second Linear Regression Modeling (LRM2): You repeat a similar process of data preparation, model building, and evaluation for a different response variable, "sellingppu."
+- Second Linear Regression Modeling (LRM2): You repeat a similar process of data preparation, model building, and evaluation for a different response variable, "sellingppu."
